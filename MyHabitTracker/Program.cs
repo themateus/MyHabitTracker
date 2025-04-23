@@ -60,10 +60,10 @@ class Program
                     Insert();
                     break;
                 case "3":
-                    //Delete();
+                    Delete();
                     break;
                 case "4":
-                    //Update();
+                    Update();
                     break;
                 default:
                     System.Console.WriteLine("\nInvalid Command. Write a number from 0 to 4.\n");
@@ -85,6 +85,60 @@ class Program
             $"INSERT INTO drinking_water(date, quantity) VALUES('{date}', {quantity})";
 
         tableCmd.ExecuteNonQuery();
+        connection.Close();
+    }
+
+    private static void Delete()
+    {
+        Console.Clear();
+        GetAllRecords();
+
+        var recordId = GetNumberInput("\n\nPlease type the Id of the record you want to delete. Type 0 to return to Main Menu\n\n");
+
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        var tableCmd = connection.CreateCommand();
+        tableCmd.CommandText = $"DELETE FROM drinking_water WHERE Id = '{recordId}'";
+
+        int rowCount = tableCmd.ExecuteNonQuery();
+
+        if (rowCount == 0)
+        {
+            Console.WriteLine($"\n\nRecord with Id {recordId} doesn't exist.\n\n");
+            Delete();
+        }
+
+        Console.WriteLine($"\n\nRecord with Id {recordId} was deleted.\n\n");
+    }
+
+    private static void Update()
+    {
+        GetAllRecords();
+
+        var recordId = GetNumberInput("\n\nPlease type the Id of the record would like to update. Type 0 to return to Main Menu");
+
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        var checkCmd = connection.CreateCommand();
+        checkCmd.CommandText = $"SELECT EXISTS(SELECT 1 FROM drinking_water WHERE Id = {recordId})";
+        int checkQuery = Convert.ToInt32(checkCmd.ExecuteScalar());
+
+        if (checkQuery == 0)
+        {
+            Console.WriteLine($"\n\nRecord with Id {recordId} doesn't exist.\n\n");
+            connection.Close();
+            Update();
+        }
+
+        string date = GetDateInput();
+
+        int quantity = GetNumberInput("\n\nPlease insert number of glasses or other measure of your choice (no decimals allowed)\n\n");
+
+        var tableCmd = connection.CreateCommand();
+        tableCmd.CommandText = $"UPDATE drinking_water SET date = '{date}', quantity = {quantity}  WHERE Id = {recordId}";
+
+        tableCmd.ExecuteNonQuery();
+
         connection.Close();
     }
 
