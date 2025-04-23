@@ -50,8 +50,9 @@ class Program
             switch(commandInput)
             {
                 case "0":
-                    System.Console.WriteLine("\nGoodbye\n");
+                    Console.WriteLine("\nGoodbye\n");
                     closeApp = true;
+                    Environment.Exit(0);
                     break;
                 case "1":
                     GetAllRecords();
@@ -66,7 +67,7 @@ class Program
                     Update();
                     break;
                 default:
-                    System.Console.WriteLine("\nInvalid Command. Write a number from 0 to 4.\n");
+                    Console.WriteLine("\nInvalid Command. Write a number from 0 to 4.\n");
                     break;
             }
         }
@@ -150,6 +151,12 @@ class Program
 
         if (dateInput == "0") GetUserInput();
 
+        while (!DateTime.TryParseExact(dateInput, "dd-MM-yy", new CultureInfo("en-US"), DateTimeStyles.None, out _))
+        {
+            Console.WriteLine("\n\nInvalid date. (Format: dd-MM-yy). Type 0 to return to main menu.\n\n");
+            dateInput = Console.ReadLine();
+        }
+
         return dateInput;
     }
 
@@ -160,6 +167,12 @@ class Program
         string? numberInput = Console.ReadLine();
 
         if (numberInput == "0") GetUserInput();
+
+        while (!Int32.TryParse(numberInput, out _) || Convert.ToInt32(numberInput) < 0)
+        {
+            Console.WriteLine("\n\nInvalid number. Try again.\n\n");
+            numberInput = Console.ReadLine();
+        }
 
         int finalInput = Convert.ToInt32(numberInput);
 
