@@ -3,13 +3,13 @@ using Microsoft.Data.Sqlite;
 
 namespace MyHabitTracker;
 
-class Program
+internal static class Program
 {
-    static string _connectionString = @"Data Source=MyHabitTracker.db";
+    private const string ConnectionString = @"Data Source=MyHabitTracker.db";
 
-    static void Main(string[] args)
+    private static void Main()
     {
-        using var connection = new SqliteConnection(_connectionString);
+        using var connection = new SqliteConnection(ConnectionString);
         connection.Open();
         var tableCmd = connection.CreateCommand();
 
@@ -30,20 +30,20 @@ class Program
         GetUserInput();
     }
 
-    static void GetUserInput()
+    private static void GetUserInput()
     {
         Console.Clear();
         bool closeApp = false;
         while (closeApp == false)
         {
-            System.Console.WriteLine("\n\nMAIN MENU");
-            System.Console.WriteLine("\nWhat would you like to do?");
-            System.Console.WriteLine("\nType 0 to Close Application.");
-            System.Console.WriteLine("Type 1 to View All Record.");
-            System.Console.WriteLine("Type 2 to Insert Record.");
-            System.Console.WriteLine("Type 3 to Delete Record.");
-            System.Console.WriteLine("Type 4 to Update Record.");
-            System.Console.WriteLine("-------------------------------------\n");
+            Console.WriteLine("\n\nMAIN MENU");
+            Console.WriteLine("\nWhat would you like to do?");
+            Console.WriteLine("\nType 0 to Close Application.");
+            Console.WriteLine("Type 1 to View All Record.");
+            Console.WriteLine("Type 2 to Insert Record.");
+            Console.WriteLine("Type 3 to Delete Record.");
+            Console.WriteLine("Type 4 to Update Record.");
+            Console.WriteLine("-------------------------------------\n");
 
             string? commandInput = Console.ReadLine();
 
@@ -79,13 +79,16 @@ class Program
 
         int quantity = GetNumberInput("\n\nPlease insert number of glasses or other measure of your choice (no decimals allowed)\n\n");
 
-        using var connection = new SqliteConnection(_connectionString);
+        using var connection = new SqliteConnection(ConnectionString);
         connection.Open();
-        var tableCmd = connection.CreateCommand();
-        tableCmd.CommandText = 
-            $"INSERT INTO drinking_water(date, quantity) VALUES('{date}', {quantity})";
+        
+        //Parametrized query
+        using var command = new SqliteCommand("INSERT INTO drinking_water(date, quantity) VALUES(@date, @quantity)", connection);
 
-        tableCmd.ExecuteNonQuery();
+        command.Parameters.AddWithValue("@date", date);
+        command.Parameters.AddWithValue("@quantity", quantity);
+        command.ExecuteNonQuery();
+        
         connection.Close();
     }
 
@@ -96,12 +99,15 @@ class Program
 
         var recordId = GetNumberInput("\n\nPlease type the Id of the record you want to delete. Type 0 to return to Main Menu\n\n");
 
-        using var connection = new SqliteConnection(_connectionString);
+        using var connection = new SqliteConnection(ConnectionString);
         connection.Open();
-        var tableCmd = connection.CreateCommand();
-        tableCmd.CommandText = $"DELETE FROM drinking_water WHERE Id = '{recordId}'";
+        
+        //Parametrized query
+        using var command = new SqliteCommand("DELETE FROM drinking_water WHERE Id = @recordId", connection);
 
-        int rowCount = tableCmd.ExecuteNonQuery();
+        command.Parameters.AddWithValue("@recordId", recordId);
+
+        var rowCount = command.ExecuteNonQuery();
 
         if (rowCount == 0)
         {
@@ -118,11 +124,14 @@ class Program
 
         var recordId = GetNumberInput("\n\nPlease type the Id of the record would like to update. Type 0 to return to Main Menu");
 
-        using var connection = new SqliteConnection(_connectionString);
+        using var connection = new SqliteConnection(ConnectionString);
         connection.Open();
-        var checkCmd = connection.CreateCommand();
-        checkCmd.CommandText = $"SELECT EXISTS(SELECT 1 FROM drinking_water WHERE Id = {recordId})";
-        int checkQuery = Convert.ToInt32(checkCmd.ExecuteScalar());
+
+        //Parametrized query
+        using var command = new SqliteCommand("SELECT EXISTS(SELECT 1 FROM drinking_water WHERE Id = @recordId)",connection);
+        command.Parameters.AddWithValue("@recordId", recordId);
+        
+        var checkQuery = Convert.ToInt32(command.ExecuteScalar());
 
         if (checkQuery == 0)
         {
@@ -135,17 +144,20 @@ class Program
 
         int quantity = GetNumberInput("\n\nPlease insert number of glasses or other measure of your choice (no decimals allowed)\n\n");
 
-        var tableCmd = connection.CreateCommand();
-        tableCmd.CommandText = $"UPDATE drinking_water SET date = '{date}', quantity = {quantity}  WHERE Id = {recordId}";
+        //Parametrized query
+        using var updateCmd = new SqliteCommand("UPDATE drinking_water SET date = @date, quantity = @quantity  WHERE Id = @recordId", connection);
+        updateCmd.Parameters.AddWithValue("@date", date);
+        updateCmd.Parameters.AddWithValue("@quantity", quantity);
+        updateCmd.Parameters.AddWithValue("@recordId", recordId);
 
-        tableCmd.ExecuteNonQuery();
+        updateCmd.ExecuteNonQuery();
 
         connection.Close();
     }
 
-    internal static string GetDateInput()
+    private static string GetDateInput()
     {
-        System.Console.WriteLine("\nPlease insert the date: (Format: dd-mm-yy). Type 0 to return to main menu.\n");
+        Console.WriteLine("\nPlease insert the date: (Format: dd-mm-yy). Type 0 to return to main menu.\n");
 
         string? dateInput = Console.ReadLine();
 
@@ -160,9 +172,9 @@ class Program
         return dateInput;
     }
 
-    internal static int GetNumberInput(string message)
+    private static int GetNumberInput(string message)
     {
-        System.Console.WriteLine(message);
+        Console.WriteLine(message);
 
         string? numberInput = Console.ReadLine();
 
@@ -179,11 +191,13 @@ class Program
         return finalInput;
     }
 
-    internal static void GetAllRecords()
+    private static void GetAllRecords()
     {
         Console.Clear();
-        using var connection = new SqliteConnection(_connectionString);
+        using var connection = new SqliteConnection(ConnectionString);
         connection.Open();
+        
+        
         var tableCmd = connection.CreateCommand();
         tableCmd.CommandText = $"SELECT * FROM drinking_water";
 
@@ -215,7 +229,7 @@ class Program
         Console.WriteLine("---------------------------\n");
         foreach (var dw in tableData)
         {
-            Console.WriteLine($"{dw.Id} - {dw.Date.ToString("dd-MM-yyyy")} - Quantidade: {dw.Quantity}");
+            Console.WriteLine($"{dw.Id} - {dw.Date:dd-MM-yyyy} - Quantidade: {dw.Quantity}");
         }
 
         Console.WriteLine("---------------------------\n");
@@ -224,7 +238,7 @@ class Program
 
 public class DrinkingWater
 {
-    public int Id { get; set; }
-    public DateTime Date { get; set; }
-    public int Quantity { get; set; }
+    public int Id { get; init; }
+    public DateTime Date { get; init; }
+    public int Quantity { get; init; }
 }
