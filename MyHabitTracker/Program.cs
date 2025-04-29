@@ -1,6 +1,10 @@
 ﻿using System.Globalization;
 using Microsoft.Data.Sqlite;
 
+//E SE EU FIZER UM MENU PARA ESCOLHER O HABITO E ABRE O GETUSERINPUT
+//PODENDO DIGITAR 0 PARA RETORNAR AO MENU DE ESCOLHA DE HABITO
+//O MENU PARA ESCOLHER O HABITO PODEMOS USAR AS MESMAS FUNCOES DO GETUSERINPUT
+
 namespace MyHabitTracker;
 
 internal static class Program
@@ -13,16 +17,28 @@ internal static class Program
         connection.Open();
         var tableCmd = connection.CreateCommand();
 
-        //Using @ allow to create multiline statement
+        // Criando tabela de hábitos com as unidades
         tableCmd.CommandText =
             """
-            CREATE TABLE IF NOT EXISTS drinking_water (
+            CREATE TABLE IF NOT EXISTS habits (
                                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                Date TEXT NOT NULL,
-                                Quantity INTEGER NOT NULL
+                                Name TEXT NOT NULL,
+                                Unit INTEGER NOT NULL
                                 )
             """;
-
+        tableCmd.ExecuteNonQuery();
+        
+        // Criando tabela para registro dos hábitos
+        tableCmd.CommandText =
+            """
+            CREATE TABLE IF NOT EXISTS register (
+                                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                HabitId TEXT NOT NULL,
+                                Date TEXT NOT NULL,
+                                Value INTEGER NOT NULL,
+                                FOREIGN KEY (HabitId) REFERENCES habits(Id)
+                                )
+            """;
         tableCmd.ExecuteNonQuery();
 
         connection.Close();
@@ -36,14 +52,23 @@ internal static class Program
         bool closeApp = false;
         while (closeApp == false)
         {
-            Console.WriteLine("\n\nMAIN MENU");
-            Console.WriteLine("\nWhat would you like to do?");
-            Console.WriteLine("\nType 0 to Close Application.");
-            Console.WriteLine("Type 1 to View All Record.");
-            Console.WriteLine("Type 2 to Insert Record.");
-            Console.WriteLine("Type 3 to Delete Record.");
-            Console.WriteLine("Type 4 to Update Record.");
-            Console.WriteLine("-------------------------------------\n");
+            Console.WriteLine("\n===== MAIN MENU =====");
+            Console.WriteLine("\nHABITS:");
+            Console.WriteLine("     1. Insert Habit.");
+            Console.WriteLine("     2. Update Habit.");
+            Console.WriteLine("     3. Delete Habit.");
+            Console.WriteLine("     4. View All Habits.");
+            
+            Console.WriteLine("\nRECORDS:");
+            Console.WriteLine("     5. Insert Record.");
+            Console.WriteLine("     6. Update Record.");
+            Console.WriteLine("     7. Delete Record.");
+            Console.WriteLine("     8. View All Records.");
+
+            Console.WriteLine("\nOTHER:");
+            Console.WriteLine("     0.Close Application");
+            Console.WriteLine("\n======================\n");
+            Console.Write("Select an option: ");
 
             string? commandInput = Console.ReadLine();
 
@@ -55,29 +80,58 @@ internal static class Program
                     Environment.Exit(0);
                     break;
                 case "1":
-                    GetAllRecords();
+                    InsertHabit();
                     break;
                 case "2":
-                    Insert();
+                    UpdateHabit();
                     break;
                 case "3":
-                    Delete();
+                    DeleteHabit();
                     break;
                 case "4":
-                    Update();
+                    GetAllHabits();
+                    break;
+                case "5":
+                    InsertRecord();
+                    break;
+                case "6":
+                    UpdateRecord();
+                    break;
+                case "7":
+                    DeleteRecord();
+                    break;
+                case "8":
+                    GetAllRecords();
                     break;
                 default:
-                    Console.WriteLine("\nInvalid Command. Write a number from 0 to 4.\n");
+                    Console.WriteLine("\nInvalid Command. Write a number from 0 to 8.\n");
                     break;
             }
         }
     }
 
-    private static void Insert()
+    private static void InsertHabit()
+    {
+        string? habitName = GetNameInput("\n\nWrite the habit name. Type 0 to return to main menu.\n\n");
+        string? unitName = GetNameInput("\n\nWrite the unit of measurement. Type 0 to return to main menu.\n\n");
+
+        using var connection = new SqliteConnection(ConnectionString);
+        connection.Open();
+        
+        //Parametrized query
+        using var command = new SqliteCommand("INSERT INTO habits(Name, Unit) VALUES(@Name, @Unit)", connection);
+        command.Parameters.AddWithValue("@Name", habitName);
+        command.Parameters.AddWithValue("@Unit", unitName);
+        command.ExecuteNonQuery();
+
+        connection.Close();
+    }
+    
+    private static void InsertRecord()
     {
         string date = GetDateInput();
 
-        int quantity = GetNumberInput("\n\nPlease insert number of glasses or other measure of your choice (no decimals allowed)\n\n");
+        int quantity = GetNumberInput("\n\nPlease insert number of \n\n");
 
         using var connection = new SqliteConnection(ConnectionString);
         connection.Open();
@@ -92,7 +146,7 @@ internal static class Program
         connection.Close();
     }
 
-    private static void Delete()
+    private static void DeleteRecord()
     {
         Console.Clear();
         GetAllRecords();
@@ -112,13 +166,13 @@ internal static class Program
         if (rowCount == 0)
         {
             Console.WriteLine($"\n\nRecord with Id {recordId} doesn't exist.\n\n");
-            Delete();
+            DeleteRecord();
         }
 
         Console.WriteLine($"\n\nRecord with Id {recordId} was deleted.\n\n");
     }
 
-    private static void Update()
+    private static void UpdateRecord()
     {
         GetAllRecords();
 
@@ -137,7 +191,7 @@ internal static class Program
         {
             Console.WriteLine($"\n\nRecord with Id {recordId} doesn't exist.\n\n");
             connection.Close();
-            Update();
+            UpdateRecord();
         }
 
         string date = GetDateInput();
@@ -191,6 +245,67 @@ internal static class Program
         return finalInput;
     }
 
+    private static string? GetNameInput(string message)
+    {
+        Console.WriteLine(message);
+
+        string? nameInput = Console.ReadLine();
+
+        if (nameInput == "0") GetUserInput();
+        
+        while (double.TryParse(nameInput, out _))
+        {
+            Console.WriteLine("\n\nThat's a number. Try again.\n\n");
+            nameInput = Console.ReadLine();
+        }
+
+        return nameInput;
+    }
+
+    private static void GetAllHabits()
+    {
+        Console.Clear();
+        using var connection = new SqliteConnection(ConnectionString);
+        connection.Open();
+
+        var tableCmd = connection.CreateCommand();
+        tableCmd.CommandText = $"SELECT * FROM habits";
+
+        List<Habits> tableData = new();
+
+        SqliteDataReader reader = tableCmd.ExecuteReader();
+
+        if (reader.HasRows)
+        {
+            while (reader.Read())
+            {
+                tableData.Add(
+                    new Habits
+                    {
+                        Id = reader.GetInt32(0),
+                        Name = reader.GetString(1),
+                        Unit = reader.GetString(2)
+                    });
+            }
+        }
+        else
+        {
+            Console.WriteLine("No rows found.");
+        }
+        
+        connection.Close();
+        
+        Console.WriteLine("---------------------------\n");
+        Console.WriteLine("This is your habits:\n");
+        foreach (var dw in tableData)
+        {
+            //Usar esse -n faz com que fique alinhado de forma fixa
+            Console.WriteLine($"{dw.Id, -5} {dw.Name, -20} {dw.Unit, -10}");
+        }
+
+        Console.WriteLine("\n---------------------------\n");
+    }
+
     private static void GetAllRecords()
     {
         Console.Clear();
@@ -241,4 +356,11 @@ public class DrinkingWater
     public int Id { get; init; }
     public DateTime Date { get; init; }
     public int Quantity { get; init; }
+}
+
+public class Habits
+{
+    public int Id { get; init; }
+    public string Name { get; init; }
+    public string Unit { get; init; }
 }
