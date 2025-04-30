@@ -126,6 +126,106 @@ internal static class Program
 
         connection.Close();
     }
+
+    private static void UpdateHabit()
+    {
+        GetAllHabits();
+        var idSelected = GetNumberInput("\nWrite the number of the habit that you want to update. Type 0 to return to main menu\n");
+
+        using var connection = new SqliteConnection(ConnectionString);
+        connection.Open();
+
+        using var command = new SqliteCommand("SELECT EXISTS(SELECT 1 FROM habits WHERE ID = @habitId)", connection);
+        command.Parameters.AddWithValue("@habitId", idSelected);
+
+        var checkQuery = Convert.ToInt32(command.ExecuteScalar());
+        if (checkQuery == 0)
+        {
+            Console.WriteLine($"\nHabit with Id {idSelected} doesn't exists.");
+            connection.Close();
+            UpdateHabit();
+        }
+        
+        string? habitName = GetNameInput("\n\nWrite the habit name. Type 0 to return to main menu.\n\n");
+        string? unitName = GetNameInput("\n\nWrite the unit of measurement. Type 0 to return to main menu.\n\n");
+        
+        //Parametrized query
+        using var updateCommand = new SqliteCommand("UPDATE habits SET Name = @Name, Unit = @Unit WHERE Id = @HabitId", connection);
+        updateCommand.Parameters.AddWithValue("@Name", habitName);
+        updateCommand.Parameters.AddWithValue("@Unit", unitName);
+        updateCommand.Parameters.AddWithValue("@HabitId", idSelected);
+        updateCommand.ExecuteNonQuery();
+
+        connection.Close();
+    }
+
+    private static void DeleteHabit()
+    {
+        Console.Clear();
+        GetAllHabits();
+
+        var habitId = GetNumberInput("\nType the Id of the Habit to delete. Type 0 to return to main menu.");
+
+        using var connection = new SqliteConnection(ConnectionString);
+        connection.Open();
+
+        using var command = new SqliteCommand("DELETE FROM habits WHERE Id = @HabitId",connection);
+        command.Parameters.AddWithValue("@HabitId", habitId);
+
+        var rowCount = command.ExecuteNonQuery();
+        if (rowCount == 0)
+        {
+            Console.WriteLine($"\nHabbit with Id {habitId} doesn't exists.");
+            connection.Close();
+            DeleteHabit();
+        }
+        
+        Console.WriteLine($"\nHabbit with id {habitId} was deleted.");
+    }
+    
+    private static void GetAllHabits()
+    {
+        Console.Clear();
+        using var connection = new SqliteConnection(ConnectionString);
+        connection.Open();
+
+        var tableCmd = connection.CreateCommand();
+        tableCmd.CommandText = $"SELECT * FROM habits";
+
+        List<Habits> tableData = new();
+
+        SqliteDataReader reader = tableCmd.ExecuteReader();
+
+        if (reader.HasRows)
+        {
+            while (reader.Read())
+            {
+                tableData.Add(
+                    new Habits
+                    {
+                        Id = reader.GetInt32(0),
+                        Name = reader.GetString(1),
+                        Unit = reader.GetString(2)
+                    });
+            }
+        }
+        else
+        {
+            Console.WriteLine("No rows found.");
+        }
+        
+        connection.Close();
+        
+        Console.WriteLine("---------------------------\n");
+        Console.WriteLine("This is your habits:\n");
+        foreach (var dw in tableData)
+        {
+            //Usar esse -n faz com que fique alinhado de forma fixa
+            Console.WriteLine($"{dw.Id, -5} {dw.Name, -20} {dw.Unit, -10}");
+        }
+
+        Console.WriteLine("\n---------------------------\n");
+    }
     
     private static void InsertRecord()
     {
@@ -166,6 +266,7 @@ internal static class Program
         if (rowCount == 0)
         {
             Console.WriteLine($"\n\nRecord with Id {recordId} doesn't exist.\n\n");
+            connection.Close();
             DeleteRecord();
         }
 
@@ -260,50 +361,6 @@ internal static class Program
         }
 
         return nameInput;
-    }
-
-    private static void GetAllHabits()
-    {
-        Console.Clear();
-        using var connection = new SqliteConnection(ConnectionString);
-        connection.Open();
-
-        var tableCmd = connection.CreateCommand();
-        tableCmd.CommandText = $"SELECT * FROM habits";
-
-        List<Habits> tableData = new();
-
-        SqliteDataReader reader = tableCmd.ExecuteReader();
-
-        if (reader.HasRows)
-        {
-            while (reader.Read())
-            {
-                tableData.Add(
-                    new Habits
-                    {
-                        Id = reader.GetInt32(0),
-                        Name = reader.GetString(1),
-                        Unit = reader.GetString(2)
-                    });
-            }
-        }
-        else
-        {
-            Console.WriteLine("No rows found.");
-        }
-        
-        connection.Close();
-        
-        Console.WriteLine("---------------------------\n");
-        Console.WriteLine("This is your habits:\n");
-        foreach (var dw in tableData)
-        {
-            //Usar esse -n faz com que fique alinhado de forma fixa
-            Console.WriteLine($"{dw.Id, -5} {dw.Name, -20} {dw.Unit, -10}");
-        }
-
-        Console.WriteLine("\n---------------------------\n");
     }
 
     private static void GetAllRecords()
