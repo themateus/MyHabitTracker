@@ -1,10 +1,6 @@
 ﻿using System.Globalization;
 using Microsoft.Data.Sqlite;
 
-//E SE EU FIZER UM MENU PARA ESCOLHER O HABITO E ABRE O GETUSERINPUT
-//PODENDO DIGITAR 0 PARA RETORNAR AO MENU DE ESCOLHA DE HABITO
-//O MENU PARA ESCOLHER O HABITO PODEMOS USAR AS MESMAS FUNCOES DO GETUSERINPUT
-
 namespace MyHabitTracker;
 
 internal static class Program
@@ -225,40 +221,119 @@ internal static class Program
         }
 
         Console.WriteLine("\n---------------------------\n");
+        Console.WriteLine("Press any key to continue.");
+        Console.ReadLine();
     }
     
     private static void InsertRecord()
     {
-        string date = GetDateInput();
-
-        int quantity = GetNumberInput("\n\nPlease insert number of \n\n");
-
+        Console.Clear();
+        GetAllHabits();
+        int habitId = GetNumberInput("\nSelect the habit Id to record a value. Type 0 to return to main menu");
+        
         using var connection = new SqliteConnection(ConnectionString);
         connection.Open();
         
-        //Parametrized query
-        using var command = new SqliteCommand("INSERT INTO drinking_water(date, quantity) VALUES(@date, @quantity)", connection);
+        //Verifica se o hábito existe
+        
+        using var checkCommand = new SqliteCommand("SELECT EXISTS(SELECT 1 FROM habits WHERE Id = @habitId)", connection);
+        checkCommand.Parameters.AddWithValue("@habitId", habitId);
 
+        var checkQuery = Convert.ToInt32(checkCommand.ExecuteScalar());
+        if (checkQuery == 0)
+        {
+            Console.WriteLine($"\nHabit with Id {habitId} doesn't exist.");
+            connection.Close();
+            InsertRecord();
+        }
+        
+        string date = GetDateInput();
+        int quantity = GetNumberInput("\n\nPlease insert number of record.\n\n");
+
+        using var command = new SqliteCommand("INSERT INTO register (HabitId, Date, Value) VALUES (@habitId, @date, @value)", connection);
+        command.Parameters.AddWithValue("@habitId", habitId);
         command.Parameters.AddWithValue("@date", date);
-        command.Parameters.AddWithValue("@quantity", quantity);
+        command.Parameters.AddWithValue("@value", quantity);
         command.ExecuteNonQuery();
         
+        connection.Close();
+    }
+    
+    private static void UpdateRecord()
+    {
+        GetAllHabits();
+
+        var selectedHabit = GetNumberInput("\nSelect the habit Id to update a record. Type 0 to return to Main Menu.");
+
+        using var connection = new SqliteConnection(ConnectionString);
+        connection.Open();
+
+        // Verify if habit id exists
+        using var checkCommand = new SqliteCommand("SELECT EXISTS(SELECT 1 FROM habits WHERE Id = @habitId)",connection);
+        checkCommand.Parameters.AddWithValue("@habitId", selectedHabit);
+        
+        var checkQuery = Convert.ToInt32(checkCommand.ExecuteScalar());
+        if (checkQuery == 0)
+        {
+            Console.WriteLine($"\n\nHabit with Id {selectedHabit} doesn't exist.\n\n");
+            connection.Close();
+            UpdateRecord();
+        }
+
+        GetAllRecords(selectedHabit);
+        var recordId = GetNumberInput("\n\nPlease type the Id of the record would like to update. Type 0 to return to Main Menu");
+
+        // Verify if record Id exist
+        using var checkCommand2 = new SqliteCommand("SELECT EXISTS(SELECT 1 FROM register WHERE Id = @recordId)",connection);
+        checkCommand2.Parameters.AddWithValue("@recordId", recordId);
+        
+        var checkQuery2 = Convert.ToInt32(checkCommand.ExecuteScalar());
+        if (checkQuery2 == 0)
+        {
+            Console.WriteLine($"\n\nHabit with Id {recordId} doesn't exist.\n\n");
+            connection.Close();
+            UpdateRecord();
+        }
+        
+        var date = GetDateInput();
+        int quantity = GetNumberInput("\n\nPlease insert number of glasses or other measure of your choice (no decimals allowed)\n\n");
+        
+        using var updateCmd = new SqliteCommand("UPDATE register SET Date = @date, Value = @quantity  WHERE Id = @recordId", connection);
+        updateCmd.Parameters.AddWithValue("@date", date);
+        updateCmd.Parameters.AddWithValue("@quantity", quantity);
+        updateCmd.Parameters.AddWithValue("@recordId", recordId);
+
+        updateCmd.ExecuteNonQuery();
+
         connection.Close();
     }
 
     private static void DeleteRecord()
     {
         Console.Clear();
-        GetAllRecords();
-
-        var recordId = GetNumberInput("\n\nPlease type the Id of the record you want to delete. Type 0 to return to Main Menu\n\n");
-
+        GetAllHabits();
+        
+        var selectedHabit = GetNumberInput("\nType the HabitId you want to delete. Type 0 to return to Main Menu\n");
+        
         using var connection = new SqliteConnection(ConnectionString);
         connection.Open();
-        
-        //Parametrized query
-        using var command = new SqliteCommand("DELETE FROM drinking_water WHERE Id = @recordId", connection);
 
+        using var checkHabit = new SqliteCommand("SELECT 1 FROM habits WHERE Id = @habitId", connection);
+        checkHabit.Parameters.AddWithValue("@habitId", selectedHabit);
+
+        var checkQueryHabit = Convert.ToInt32(checkHabit.ExecuteNonQuery());
+        if (checkQueryHabit == 0)
+        {
+            Console.WriteLine($"\n\nHabit with Id {selectedHabit} doesn't exist.\n\n");
+            connection.Close();
+            DeleteRecord();
+        }
+        
+        GetAllRecords(selectedHabit);
+
+        var recordId = GetNumberInput("\n\nPlease type the Id of the record you want to delete. Type 0 to return to Main Menu\n\n");
+        
+        using var command = new SqliteCommand("DELETE FROM register WHERE Id = @recordId", connection);
         command.Parameters.AddWithValue("@recordId", recordId);
 
         var rowCount = command.ExecuteNonQuery();
@@ -273,43 +348,60 @@ internal static class Program
         Console.WriteLine($"\n\nRecord with Id {recordId} was deleted.\n\n");
     }
 
-    private static void UpdateRecord()
+    private static void GetAllRecords(int selectedHabit = 0)
     {
-        GetAllRecords();
-
-        var recordId = GetNumberInput("\n\nPlease type the Id of the record would like to update. Type 0 to return to Main Menu");
-
         using var connection = new SqliteConnection(ConnectionString);
         connection.Open();
-
-        //Parametrized query
-        using var command = new SqliteCommand("SELECT EXISTS(SELECT 1 FROM drinking_water WHERE Id = @recordId)",connection);
-        command.Parameters.AddWithValue("@recordId", recordId);
         
-        var checkQuery = Convert.ToInt32(command.ExecuteScalar());
+        var tableCmd = connection.CreateCommand();
+        tableCmd.CommandText = $"SELECT register.*, " +
+                               $"habits.Name AS HabitName, " +
+                               $"habits.Unit AS HabitUnit " +
+                               $"FROM register JOIN habits ON register.HabitId = habits.Id";
+        // With this I can use the relation in sql that register tem o HabbitId
+        
+        List<Register> tableData = new();
 
-        if (checkQuery == 0)
+        SqliteDataReader reader = tableCmd.ExecuteReader();
+
+        if (reader.HasRows)
         {
-            Console.WriteLine($"\n\nRecord with Id {recordId} doesn't exist.\n\n");
-            connection.Close();
-            UpdateRecord();
+            while (reader.Read())
+            {
+                tableData.Add(
+                    new Register()
+                    {
+                        Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                        HabitId = reader.GetInt32(reader.GetOrdinal("HabitId")),
+                        Date = reader.GetString(reader.GetOrdinal("Date")),
+                        Quantity = reader.GetInt32(reader.GetOrdinal("Value")),
+                        Name = reader.GetString(reader.GetOrdinal("HabitName")),
+                        Unit = reader.GetString(reader.GetOrdinal("HabitUnit"))
+                    });
+            }
+        }
+        else
+        {
+            Console.WriteLine("No rows found.");
+        }
+        
+        connection.Close();
+
+        Console.WriteLine("---------------------------\n");
+        Console.WriteLine($"{"Id",-5} {"Date",-12} {"Habit Name", -20} {"Value",-5} {"Habit Unit", -20}\n");
+        foreach (var dw in tableData)
+        {
+            if (dw.HabitId == selectedHabit || selectedHabit == 0)
+            {
+                Console.WriteLine($"{dw.Id,-5} {dw.Date,-12} {dw.Name, -20} {dw.Quantity,-5} {dw.Unit, -20}");
+            }
         }
 
-        string date = GetDateInput();
-
-        int quantity = GetNumberInput("\n\nPlease insert number of glasses or other measure of your choice (no decimals allowed)\n\n");
-
-        //Parametrized query
-        using var updateCmd = new SqliteCommand("UPDATE drinking_water SET date = @date, quantity = @quantity  WHERE Id = @recordId", connection);
-        updateCmd.Parameters.AddWithValue("@date", date);
-        updateCmd.Parameters.AddWithValue("@quantity", quantity);
-        updateCmd.Parameters.AddWithValue("@recordId", recordId);
-
-        updateCmd.ExecuteNonQuery();
-
-        connection.Close();
+        Console.WriteLine("\n---------------------------\n");
+        Console.WriteLine("Press any key to continue.");
+        Console.ReadLine();
     }
-
+    
     private static string GetDateInput()
     {
         Console.WriteLine("\nPlease insert the date: (Format: dd-mm-yy). Type 0 to return to main menu.\n");
@@ -362,62 +454,21 @@ internal static class Program
 
         return nameInput;
     }
-
-    private static void GetAllRecords()
-    {
-        Console.Clear();
-        using var connection = new SqliteConnection(ConnectionString);
-        connection.Open();
-        
-        
-        var tableCmd = connection.CreateCommand();
-        tableCmd.CommandText = $"SELECT * FROM drinking_water";
-
-        List<DrinkingWater> tableData = new();
-
-        SqliteDataReader reader = tableCmd.ExecuteReader();
-
-        if (reader.HasRows)
-        {
-            while (reader.Read())
-            {
-                tableData.Add(
-                    new DrinkingWater
-                    {
-                        Id = reader.GetInt32(0),
-                        Date = DateTime.ParseExact(reader.GetString(1),"dd-mm-yy",new CultureInfo("en-US")),
-                        Quantity = reader.GetInt32(2)
-                    }
-                );
-            }
-        }
-        else
-        {
-            Console.WriteLine("No rows found.");
-        }
-        
-        connection.Close();
-
-        Console.WriteLine("---------------------------\n");
-        foreach (var dw in tableData)
-        {
-            Console.WriteLine($"{dw.Id} - {dw.Date:dd-MM-yyyy} - Quantidade: {dw.Quantity}");
-        }
-
-        Console.WriteLine("---------------------------\n");
-    }
-}
-
-public class DrinkingWater
-{
-    public int Id { get; init; }
-    public DateTime Date { get; init; }
-    public int Quantity { get; init; }
 }
 
 public class Habits
 {
     public int Id { get; init; }
-    public string Name { get; init; }
-    public string Unit { get; init; }
+    public string? Name { get; init; }
+    public string? Unit { get; init; }
+}
+
+public class Register
+{
+    public int Id { get; init; }
+    public int HabitId { get; init; }
+    public string? Date { get; init; }
+    public int Quantity { get; init; }
+    public string? Name { get; init; }
+    public string? Unit { get; init; }
 }
