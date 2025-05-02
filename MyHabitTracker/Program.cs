@@ -9,6 +9,13 @@ internal static class Program
 
     private static void Main()
     {
+        SeedDatabase();
+
+        GetUserInput();
+    }
+
+    private static void SeedDatabase()
+    {
         using var connection = new SqliteConnection(ConnectionString);
         connection.Open();
         var tableCmd = connection.CreateCommand();
@@ -29,7 +36,7 @@ internal static class Program
             """
             CREATE TABLE IF NOT EXISTS register (
                                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                HabitId TEXT NOT NULL,
+                                HabitId INTEGER NOT NULL,
                                 Date TEXT NOT NULL,
                                 Value INTEGER NOT NULL,
                                 FOREIGN KEY (HabitId) REFERENCES habits(Id)
@@ -37,11 +44,62 @@ internal static class Program
             """;
         tableCmd.ExecuteNonQuery();
 
+        // Verificação para ver se há habitos registrados
+        var checkHabit = connection.CreateCommand();
+        checkHabit.CommandText = "SELECT * FROM habits";
+        var countHabit = Convert.ToInt32(checkHabit.ExecuteScalar());
+
+        if (countHabit == 0)
+        {
+            Console.WriteLine("Seeding database...");
+            
+            string[] habitNames = ["Drink Water", "Exercise", "Read", "Meditate"];
+            string[] unitNames = ["cups", "times", "pages", "minutes"];
+            List<int> habitIds = [];
+
+            for (int i=0; i<4; i++)
+            {
+                var addHabit = connection.CreateCommand();
+                addHabit.CommandText = "INSERT INTO habits(name, unit) VALUES(@name, @unit)";
+                addHabit.Parameters.AddWithValue("@name", habitNames[i]);
+                addHabit.Parameters.AddWithValue("@unit", unitNames[i]);
+                addHabit.ExecuteNonQuery();
+                
+                // Pega o ID inserio
+                addHabit.CommandText = "SELECT last_insert_rowid()";
+                int id = Convert.ToInt32(addHabit.ExecuteScalar());
+                habitIds.Add(id);
+            }
+
+            var random = new Random();
+            foreach (var id in habitIds)
+            {
+                for (int i = 0; i<=25; i++)
+                {
+                    var insertRegister = connection.CreateCommand();
+                    var randomDay = random.Next(1, 100);
+                    var date = DateTime.Now.AddDays(-randomDay).ToString("dd-MM-yy");
+                    var quantity = random.Next(1, 11);
+
+                    insertRegister.CommandText = "INSERT INTO register(habitid, date, value) VALUES (@id, @date, @quantity)";
+                    insertRegister.Parameters.AddWithValue("@id", id);
+                    insertRegister.Parameters.AddWithValue("@date", date);
+                    insertRegister.Parameters.AddWithValue("@quantity", quantity);
+
+                    insertRegister.ExecuteNonQuery();
+                }
+            }
+
+            Console.WriteLine("Seeding Complete!");
+        }
+        else
+        {
+            Console.WriteLine("Database already seeded.");
+        }
+        
         connection.Close();
-
-        GetUserInput();
     }
-
+    
     private static void GetUserInput()
     {
         Console.Clear();
